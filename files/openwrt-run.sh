@@ -8,8 +8,7 @@ function _usage() {
 
 function _cleanup() {
   # recovery route
-  sudo ip route add 192.168.100.0/24 dev enin0
-  sudo ip route del 192.168.100.100 dev enin0
+  sudo ip addr add 192.168.100.250/24 dev enin0
   # stop docker and netns
   sudo docker stop $CONTAINER >/dev/null
   sudo rm -rf /var/run/netns/$CONTAINER
@@ -79,12 +78,13 @@ ip link set veth0 up
 ip link set veth1 netns ${CONTAINER}
 ip netns exec ${CONTAINER} ip link set veth1 up
 
-ip addr add 192.168.100.10 dev veth0
+ip addr add 192.168.100.250 dev veth0
 ip route add 192.168.100.1 dev veth0
-ip route add 192.168.100.100 dev enin0
 ip route add default via 192.168.100.1 dev veth0
+
 ip route del 192.168.100.0/24 dev enin0
 ip route del 192.168.100.1 dev veth0
+ip addr del 192.168.100.250/24 dev enin0
 
 # Reload FW
 docker exec -i $CONTAINER sh -c '
