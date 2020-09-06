@@ -11,8 +11,7 @@ RUN echo "src/gz openwrt_dist http://openwrt-dist.sourceforge.net/packages/base/
     && echo "src/gz openwrt_dist_luci http://openwrt-dist.sourceforge.net/packages/luci" >>  /etc/opkg/customfeeds.conf
 RUN mkdir -p /var/lock && opkg update
 RUN opkg remove dnsmasq && opkg install ipset iperf3 ip-full dnsmasq-full
-RUN opkg install luci-compat luci-mod-failsafe luci-ssl-openssl \
-    luci-i18n-base-zh-cn luci-i18n-firewall-zh-cn luci-theme-material luci-theme-openwrt 
+RUN opkg install luci-compat luci-i18n-base-zh-cn luci-i18n-firewall-zh-cn luci-theme-material luci-theme-openwrt 
 RUN opkg install libustream-openssl curl wget zsh git git-http vim-full 
 RUN opkg install luci-i18n-aria2-zh-cn openvpn-openssl openvpn-easy-rsa luci-i18n-openvpn-zh-cn luci-i18n-privoxy-zh-cn \ 
     luci-i18n-qos-zh-cn collectd-mod-ping luci-i18n-statistics-zh-cn luci-app-unbound luci-i18n-upnp-zh-cn 

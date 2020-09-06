@@ -7,11 +7,12 @@ function _usage() {
 }
 
 function _cleanup() {
-  # recovery route
-  sudo ip addr add 192.168.100.250/24 dev enin0
   # stop docker and netns
   sudo docker stop $CONTAINER >/dev/null
   sudo rm -rf /var/run/netns/$CONTAINER
+
+  # recovery route
+  sudo ip addr add 192.168.100.250/24 dev enin0
 }
 
 # detect config file
@@ -20,11 +21,11 @@ CONFIG_FILE=${1:-$SCRIPT_DIR/../openwrt.conf}
 source $CONFIG_FILE 2>/dev/null || { _usage; exit 1; }
 
 # connect WiFi
-WWAN_ON=$(ip link | grep ${WWAN_IFACE} | wc -l)
-WPA_ON=$(ps aux | grep wpa | wc -l)
-if [ "$WWAN_ON" -eq 1 ] && [ "$WPA_ON" -eq 1 ]; then
-  wpa_supplicant -B -i ${WWAN_IFACE} -c ${SCRIPT_DIR}/../../wpa.conf
-fi
+# WWAN_ON=$(ip link | grep ${WWAN_IFACE} | wc -l)
+# WPA_ON=$(ps aux | grep wpa | wc -l)
+# if [ "$WWAN_ON" -eq 1 ] && [ "$WPA_ON" -eq 1 ]; then
+  # wpa_supplicant -B -i ${WWAN_IFACE} -c ${SCRIPT_DIR}/../../wpa.conf
+# fi
 
 # create and start docker
 if docker inspect $BUILD_TAG>/dev/null 2>&1; then
@@ -52,16 +53,15 @@ else
   exit
 fi
 
-# Connect LAN
+# Connect LAN(eth0)
 ip link add eth0 link ${LAN_IFACE} type macvlan mode passthru
 ip link set eth0 netns ${CONTAINER}
 
-# Connect WAN
+# Connect WAN(eth1)
 ip link add eth1 link ${WAN_IFACE} type macvlan mode passthru
 ip link set eth1 netns ${CONTAINER}
 
-# Connect WWAN
-usb_modeswitch -K -v 0bda -p 1a2b
+# Connect External WiFi(eth2)
 ip link add eth2 link ${WWAN_IFACE} type macvlan mode passthru
 ip link set eth2 netns openwrt-instance
 
@@ -78,13 +78,13 @@ ip link set veth0 up
 ip link set veth1 netns ${CONTAINER}
 ip netns exec ${CONTAINER} ip link set veth1 up
 
-ip addr add 192.168.100.250 dev veth0
-ip route add 192.168.100.1 dev veth0
+ip addr add 192.168.100.250/24 dev veth0
 ip route add default via 192.168.100.1 dev veth0
 
-ip route del 192.168.100.0/24 dev enin0
-ip route del 192.168.100.1 dev veth0
 ip addr del 192.168.100.250/24 dev enin0
+
+# Configure DNS
+sudo resolvectl dns veth0 192.168.100.1
 
 # Reload FW
 docker exec -i $CONTAINER sh -c '
