@@ -62,8 +62,24 @@ ip link add eth1 link ${WAN_IFACE} type macvlan mode passthru
 ip link set eth1 netns ${CONTAINER}
 
 # Connect External WiFi(eth2)
-ip link add eth2 link ${WWAN_IFACE} type macvlan mode passthru
-ip link set eth2 netns openwrt-instance
+# ip link add eth2 link ${WWAN_IFACE} type macvlan mode passthru
+# ip link set eth2 netns openwrt-instance
+
+# Configure Veth Pair for WWAN
+ip link add ${WWAN_IFACE}-veth0 type veth peer name ${WWAN_IFACE}-veth1
+ip link set ${WWAN_IFACE}-veth0 up
+
+ip link set ${WWAN_IFACE}-veth1 netns ${CONTAINER}
+ip netns exec ${CONTAINER} ip link set ${WWAN_IFACE}-veth1 up
+
+# Configure Bridge
+ip link add br0 type bridge
+ip link set ${WWAN_IFACE}-veth0 master br0
+ip link set br0 up
+
+echo 0 > /proc/sys/net/bridge/bridge-nf-call-arptables
+echo 0 > /proc/sys/net/bridge/bridge-nf-call-iptables
+echo 0 > /proc/sys/net/bridge/bridge-nf-call-ip6tables
 
 # Move WLAN
 iw phy ${WLAN_PHY} set netns name ${CONTAINER}
@@ -72,19 +88,19 @@ ip netns exec ${CONTAINER} ip link set ${WLAN_IFACE} name wlan0
 # ip netns exec ${CONTAINER} ip link set ${WWAN_IFACE} name wlan1
 
 # Set Host Network
-ip link add veth0 type veth peer name veth1
-ip link set veth0 up
+ip link add host-veth0 type veth peer name host-veth1
+ip link set host-veth0 up
 
-ip link set veth1 netns ${CONTAINER}
-ip netns exec ${CONTAINER} ip link set veth1 up
+ip link set host-veth1 netns ${CONTAINER}
+ip netns exec ${CONTAINER} ip link set host-veth1 up
 
-ip addr add 192.168.100.250/24 dev veth0
-ip route add default via 192.168.100.1 dev veth0
+ip addr add 192.168.100.250/24 dev host-veth0
+ip route add default via 192.168.100.1 dev host-veth0
 
 ip addr del 192.168.100.250/24 dev enin0
 
 # Configure DNS
-sudo resolvectl dns veth0 192.168.100.1
+sudo resolvectl dns host-veth0 192.168.100.1
 
 # Reload FW
 docker exec -i $CONTAINER sh -c '
