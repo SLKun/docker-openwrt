@@ -85,9 +85,6 @@ echo 0 > /proc/sys/net/bridge/bridge-nf-call-arptables
 echo 0 > /proc/sys/net/bridge/bridge-nf-call-iptables
 echo 0 > /proc/sys/net/bridge/bridge-nf-call-ip6tables
 
-# Start Hostapd
-systemctl restart hostapd.service 
-
 # Set Host Network
 ip link add host-veth0 type veth peer name host-veth1
 ip link set host-veth0 up
