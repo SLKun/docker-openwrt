@@ -12,7 +12,7 @@ function _cleanup() {
   sudo rm -rf /var/run/netns/$CONTAINER
 
   # recovery route
-  sudo ip addr add 192.168.100.250/24 dev enin0
+  sudo ip addr add 192.168.168.250/24 dev enin0
 }
 
 # detect config file
@@ -20,27 +20,27 @@ SCRIPT_DIR=$(cd $(dirname $0) && pwd)
 CONFIG_FILE=${1:-$SCRIPT_DIR/../openwrt.conf}
 source $CONFIG_FILE 2>/dev/null || { _usage; exit 1; }
 
-# connect WiFi
-# WWAN_ON=$(ip link | grep ${WWAN_IFACE} | wc -l)
-# WPA_ON=$(ps aux | grep wpa | wc -l)
-# if [ "$WWAN_ON" -eq 1 ] && [ "$WPA_ON" -eq 1 ]; then
-  # wpa_supplicant -B -i ${WWAN_IFACE} -c ${SCRIPT_DIR}/../../wpa.conf
-# fi
+# Connect WiFi
+WPA_ON=$(ps aux | grep wpa_supplicant | wc -l) # 1: only grep, >1: other wpa_supplicant
+if [ "$WPA_ON" -eq 1 ]; then
+  wpa_supplicant -B -i ${WWAN_IFACE} -c /etc/wpa_supplicant/wpa.conf
+fi
 
 # create and start docker
-if docker inspect $BUILD_TAG>/dev/null 2>&1; then
-  if ! docker inspect $CONTAINER >/dev/null 2>&1; then
+if docker inspect $BUILD_TAG > /dev/null 2>&1; then
+  if ! docker inspect $CONTAINER > /dev/null 2>&1; then
     docker create \
       --network none \
       --hostname OpenWRT \
-      --cap-add NET_ADMIN \
-      --cap-add NET_RAW \
+      --privileged=true \
       --sysctl net.netfilter.nf_conntrack_acct=1 \
       --sysctl net.ipv6.conf.all.disable_ipv6=0 \
       --sysctl net.ipv6.conf.all.forwarding=1 \
       --volume ${SCRIPT_DIR}/../persistent/etc:/etc \
       --name $CONTAINER $BUILD_TAG >/dev/null
   fi
+# --cap-add NET_ADMIN \
+# --cap-add NET_RAW \
   
   docker start $CONTAINER
 
@@ -69,21 +69,25 @@ ip netns exec ${CONTAINER} ip link set ${WLAN_IFACE} name wlan0
 # iw phy ${WWAN_PHY} set netns name ${CONTAINER}
 # ip netns exec ${CONTAINER} ip link set ${WWAN_IFACE} name wlan1
 
-# Configure VethPair for WWAN
-ip link add ${WWAN_IFACE}-veth0 type veth peer name ${WWAN_IFACE}-veth1
-ip link set ${WWAN_IFACE}-veth0 up
+# Move WWAN(eth2)
+ip link add eth2 link ${WWAN_IFACE} type macvlan mode passthru
+ip link set eth2 netns ${CONTAINER}
 
-ip link set ${WWAN_IFACE}-veth1 netns ${CONTAINER}
-ip netns exec ${CONTAINER} ip link set ${WWAN_IFACE}-veth1 up
+# Configure VethPair for WWAN
+# ip link add ${WWAN_IFACE}-veth0 type veth peer name ${WWAN_IFACE}-veth1
+# ip link set ${WWAN_IFACE}-veth0 up
+
+# ip link set ${WWAN_IFACE}-veth1 netns ${CONTAINER}
+# ip netns exec ${CONTAINER} ip link set ${WWAN_IFACE}-veth1 up
 
 # Configure Bridge
-ip link add br0 type bridge
-ip link set ${WWAN_IFACE}-veth0 master br0
-ip link set br0 up
+# ip link add br0 type bridge
+# ip link set ${WWAN_IFACE}-veth0 master br0
+# ip link set br0 up
 
-echo 0 > /proc/sys/net/bridge/bridge-nf-call-arptables
-echo 0 > /proc/sys/net/bridge/bridge-nf-call-iptables
-echo 0 > /proc/sys/net/bridge/bridge-nf-call-ip6tables
+# echo 0 > /proc/sys/net/bridge/bridge-nf-call-arptables
+# echo 0 > /proc/sys/net/bridge/bridge-nf-call-iptables
+# echo 0 > /proc/sys/net/bridge/bridge-nf-call-ip6tables
 
 # Set Host Network
 ip link add host-veth0 type veth peer name host-veth1
@@ -92,13 +96,13 @@ ip link set host-veth0 up
 ip link set host-veth1 netns ${CONTAINER}
 ip netns exec ${CONTAINER} ip link set host-veth1 up
 
-ip addr add 192.168.100.250/24 dev host-veth0
-ip route add default via 192.168.100.1 dev host-veth0
+ip addr add 192.168.168.250/24 dev host-veth0
+ip route add default via 192.168.168.1 dev host-veth0
 
-ip addr del 192.168.100.250/24 dev enin0
+ip addr del 192.168.168.250/24 dev enin0
 
 # Configure DNS
-resolvectl dns host-veth0 192.168.100.1
+resolvectl dns host-veth0 192.168.168.1
 
 # for OpenWRT QOS
 ip netns exec ${CONTAINER} ip link add ifb0 type ifb
